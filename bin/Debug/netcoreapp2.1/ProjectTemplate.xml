@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ProjectTemplate</name>
+    </assembly>
+    <members>
+        <member name="M:APIController.PropertyController.Post(System.String)">
+             <summary>
+             Creates a new employee
+             </summary>
+             <param name="value">Employee Object</param>
+             <remarks>
+             Sample request:
+            
+                 POST /employee
+                 {
+                    "id": 007,
+                    "name": "James Bond",
+                    "isPermanant": true
+                 }
+            
+             </remarks>
+        </member>
+    </members>
+</doc>

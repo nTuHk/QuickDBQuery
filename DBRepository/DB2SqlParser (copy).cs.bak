@@ -1,0 +1,329 @@
+using System;
+using System.Text.RegularExpressions;
+using Helper;
+using Constant;
+
+namespace DBRepository
+{
+	public class DB2SqlParser2 
+	{
+		public string Select { get; set; }
+
+		public string From { get; set; }
+
+		public string Join { get; set; }
+
+		public string Where { get; set; }
+
+		public string OrderBy { get; set; }
+
+		public string GroupBy { get; set; }
+
+		public string Having { get; set; }
+
+		public string Limit { get; set; }
+
+		public string Offset { get; set; }
+
+		//reset query value
+		public void ResetQuery()
+		{
+			this.Select = string.Empty;
+			this.Select = string.Empty; 
+			this.From = string.Empty;
+			this.Join = string.Empty;
+			this.Where = string.Empty;
+			this.OrderBy = string.Empty;
+			this.GroupBy = string.Empty;
+			this.Having = string.Empty;
+			this.Limit = string.Empty;
+			this.Offset = string.Empty;
+		}
+
+		public string SqlParser(string jsonQuery)
+		{
+			//reset query
+			this.ResetQuery();
+
+			jsonQuery = StringHelper.Simpler(jsonQuery, Pattern.PATTERN_SPECIAL_CHARS);
+
+			string sqlCommand = "";
+			//create SQL PATTERN
+
+			Match m = Regex.Match(jsonQuery, DBPatternHelper.GetQueryPattern());
+			if (m.Success == true)
+			{
+				Group objGroup = m.Groups["OBJECT"];
+				Console.WriteLine("OBJECT: {0}", objGroup.Value);
+
+				this.ObjParser(objGroup.Value);
+
+				Match objMatch = Regex.Match(objGroup.Value, DBPatternHelper.GetQueryObjPattern());
+
+				Console.WriteLine("");
+				Console.WriteLine("	- OBJ name: {0}", objMatch.Groups["OBJ_NAME"]);
+
+				Console.WriteLine("");
+				Console.WriteLine("	- OBJ Table name: {0}", objMatch.Groups["OBJ_TABLE_NAME"]);
+
+				Console.WriteLine("");
+				Console.WriteLine("	- OBJ conition: {0}", objMatch.Groups["OBJ_CONDITION"]);
+
+				Console.WriteLine("");
+				Console.WriteLine("	- OBJ pack: {0}", objMatch.Groups["OBJ_PACK"]);
+
+				Console.WriteLine("");
+				Console.WriteLine("================");
+				Console.WriteLine("");
+				CaptureCollection attrCaps = m.Groups["ATTRIBUTES"].Captures;
+				foreach(Capture cap in attrCaps)
+				{
+					string attr = cap.Value;
+					Console.WriteLine("Capture ATTRIBUTES: {0}", attr);
+					AttributeParser(cap.Value);
+
+					Console.WriteLine("");
+					Match attrMacth = Regex.Match(attr, DBPatternHelper.GetQueryAttrPattern());
+					if(attrMacth.Success == true)
+					{
+						CaptureCollection anoCaps = attrMacth.Groups["ANOTATIONS"].Captures;
+						Console.WriteLine("	- ANOTATIONS:");
+						Console.WriteLine("");
+						foreach(Capture anoCap in anoCaps)
+						{
+							Console.WriteLine("		+ ANOTATION: {0}", anoCap.Value);
+							Console.WriteLine("");
+
+							Match anoMatch = Regex.Match(anoCap.Value, DBPatternHelper.GetQueryAttrAnotationPattern());
+							Console.WriteLine("			* Ano name: {0}", anoMatch.Groups["ANOTATION_NAME"].Value);
+							Console.WriteLine("");
+
+							Console.WriteLine("			* Ano meta: {0}", anoMatch.Groups["ANOTATION_META"]);
+							Console.WriteLine("");
+							Console.WriteLine("			* Ano meta condition: {0}", anoMatch.Groups["ANOTATION_META_CONDITION"]);
+							Console.WriteLine("");
+						}
+
+						string attrName = attrMacth.Groups["ATTR_NAME"].Value;
+						Console.WriteLine("	- NAME: {0}", attrName);
+
+						Console.WriteLine("");
+
+						string colName = attrMacth.Groups["COL_NAME"].Value;
+						Console.WriteLine("	- COL NAME: {0}", colName);
+						Console.WriteLine("");
+
+						string format = attrMacth.Groups["ATTR_FORMAT"].Value;
+						Console.WriteLine("	- FORMAT: {0}", format);
+
+					}else
+					{
+						Console.WriteLine("**ATTR IS WRONG FORMAT!!");
+					}
+					Console.WriteLine("");
+				}
+
+				Console.WriteLine("");
+				Console.WriteLine("================");
+				Console.WriteLine("");
+				CaptureCollection joinCaps = m.Groups["JOIN_OBJECTS"].Captures;
+				foreach(Capture cap in joinCaps)
+				{
+					Console.WriteLine("Capture JOIN_OBJECT: {0}", cap.Value);
+					Console.WriteLine("");
+					Match joinMatch = Regex.Match(cap.Value, DBPatternHelper.GetQueryJoinPattern());
+
+					Console.WriteLine("	- Join type: {0}", joinMatch.Groups["JOIN_TYPE"].Value);
+					Console.WriteLine("");
+
+					Console.WriteLine("	- Join condition : {0}", joinMatch.Groups["JOIN_CONDITION"].Value);
+					Console.WriteLine("");
+
+					Console.WriteLine("	- Join attribute name: {0}", joinMatch.Groups["JOIN_ATTR_NAME"].Value);
+					Console.WriteLine("");
+
+					Console.WriteLine("	- Join Table name: {0}", joinMatch.Groups["JOIN_TABLE_NAME"].Value);
+					Console.WriteLine("");
+
+					Console.WriteLine("	- Join Table condition: {0}", joinMatch.Groups["JOIN_TABLE_CONDITION"].Value);
+					Console.WriteLine("");
+
+					Console.WriteLine("	- Join pack: {0}", joinMatch.Groups["JOIN_PACK"].Value);
+					Console.WriteLine("");
+
+					Console.WriteLine("	- Join Values:");
+					Console.WriteLine("");
+					CaptureCollection joinValCaps = joinMatch.Groups["JOIN_VALUES"].Captures;
+					foreach( Capture joinValCap in joinValCaps )
+					{
+						Console.WriteLine("		+ Value: {0}", joinValCap.Value);
+						Console.WriteLine("");
+					}
+
+				}
+
+
+			}else
+			{
+				Console.WriteLine("Match failed.");
+			}   
+			return StringHelper.Simpler($@"{this.Select} {this.From} {this.Join} {this.Where} {this.OrderBy} {this.GroupBy} {this.Having} {this.Limit} {this.Offset}");
+		}
+
+
+		public void ObjParser(string objStr)
+		{
+			Match objMatch = Regex.Match(objStr, DBPatternHelper.GetQueryObjPattern());
+			if(objMatch.Success == true)
+			{
+				// 1. Parser table Identifier
+				string objName = objMatch.Groups["OBJ_NAME"].Value;
+				if(string.IsNullOrEmpty(objName))
+				{
+					return;
+				}
+
+				string tableName = objMatch.Groups["OBJ_TABLE_NAME"].Value;
+				tableName = string.IsNullOrEmpty(tableName) ? objName : tableName + " AS " + objName;
+				this.From = $"FROM {tableName}";
+
+				// 2. Parser table condition
+				string condition = objMatch.Groups["OBJ_CONDITION"].Value;
+				if(!string.IsNullOrEmpty(condition))
+				{
+					this.Where = $"WHERE {condition}";
+				}
+
+				// 3. Parser pack
+				string pack = objMatch.Groups["OBJ_PACK"].Value;
+				if(!string.IsNullOrEmpty(pack))
+				{
+					switch(pack.ToUpper())
+					{
+						case "ALL":
+							break;
+
+						case "ONE":
+							this.Limit = "LIMIT 1";
+							break;
+
+						default:
+							Match packMatch = Regex.Match(pack, DBPatternHelper.GetQueryObjPackPagePattern());
+							if(packMatch.Success == true)
+							{
+								int pageIndex = Convert.ToInt32(packMatch.Groups["PAGE_INDEX"].Value);
+								int amount = Convert.ToInt32(packMatch.Groups["AMOUNT"].Value);
+								if(amount != 0)
+								{
+									this.Limit = $"LIMIT {amount}";
+									this.Offset = $"OFFSET {(pageIndex - 1) * amount}";
+								}
+							}
+							break;
+
+					}
+				}
+			}else
+			{
+				Console.WriteLine("OBJ not match!");
+			}
+		}
+
+		public void AttributeParser(string attrStr)
+		{
+			Match attrMatch = Regex.Match(attrStr, DBPatternHelper.GetQueryAttrPattern());
+
+			if(attrMatch.Success == true)
+			{
+				string attrName = attrMatch.Groups["ATTR_NAME"].Value;
+				string colName = attrMatch.Groups["COL_NAME"].Value;
+				if(!string.IsNullOrEmpty(attrName))
+				{
+					// 1. Anotaion parser
+					CaptureCollection anoCaps = attrMatch.Groups["ANOTATIONS"].Captures;
+					foreach(Capture anoCap in anoCaps)
+					{
+						Match anoMatch = Regex.Match(anoCap.Value, DBPatternHelper.GetQueryAttrAnotationPattern());
+						if(anoMatch.Success == true)
+						{
+							string anoName = anoMatch.Groups["ANOTATION_NAME"].Value.ToUpper();
+							string anoMeta = anoMatch.Groups["ANOTATION_META"].Value.ToUpper();
+
+							switch(anoName)
+							{
+								case "COUNT":
+								case "SUM":
+								case "MIN":
+								case "MAX":
+								case "AVG":
+									colName = anoName + "(" + (string.IsNullOrEmpty(colName) ? attrName : colName) + ")";
+									break;
+								case "DISTINCT":
+									colName = anoName + (string.IsNullOrEmpty(colName) ? attrName : colName); 
+									break;
+								case "GROUP":
+									if(string.IsNullOrEmpty(this.GroupBy))
+									{
+										this.GroupBy = $"GROUP BY {attrName}";
+									}else
+									{
+										this.GroupBy += $", {attrName}";
+									}
+									// check HAVING CONDITION
+									string anoMetaCondition = anoMatch.Groups["ANOTATION_META_CONDITION"].Value;
+									if(!string.IsNullOrEmpty(anoMeta) && anoMeta == "HAVING" && !string.IsNullOrEmpty(anoMetaCondition))
+									{
+										if(string.IsNullOrEmpty(this.Having))
+										{
+											this.Having = $"{anoMeta} {anoMetaCondition}";
+										}else
+										{
+											this.Having += $"AND {anoMetaCondition}";
+										}
+									}
+									break;
+								case "ORDER":
+									string orderVal = attrName;
+									switch(anoMeta)
+									{
+										case "DESC":
+											orderVal += $" {anoMeta}";
+											break;
+										default:
+											break;
+									}
+									
+									if(string.IsNullOrEmpty(this.OrderBy))
+									{
+										this.OrderBy = $"ORDER BY {orderVal}";
+									}else
+									{
+										this.OrderBy += $", {orderVal}";
+									}
+									break;
+								default:
+									break;
+
+							}
+						}
+					}
+
+
+					// 2. Name Parser
+					attrName = string.IsNullOrEmpty(colName) ? attrName : colName + " AS " + attrName;
+					if(string.IsNullOrEmpty(this.Select))
+					{
+						this.Select = $"SELECT {attrName}";
+					}else
+					{
+						this.Select += $", {attrName}";
+					}
+				}
+			}else
+			{
+				Console.WriteLine("Attributes not match!");
+			}
+		}
+
+	}
+}
